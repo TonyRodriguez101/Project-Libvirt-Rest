@@ -1,0 +1,30 @@
+<domain type='kvm'>
+  <name>ubuntu-vm</name>
+  <memory unit='KiB'>2048576</memory> <!-- 2GB de RAM -->
+  <vcpu placement='static'>2</vcpu> <!-- 2 CPUs -->
+  <os>
+    <type arch='x86_64' machine='pc-i440fx-2.9'>hvm</type>
+    <boot dev='cdrom'/>
+  </os>
+  <devices>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='/var/lib/libvirt/images/ubuntu-vm.qcow2'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <disk type='network' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source protocol='http' name='releases.ubuntu.com/20.04/ubuntu-20.04.2-live-server-amd64.iso'>
+        <host name='releases.ubuntu.com' port='80'/>
+      </source>
+      <target dev='hdc' bus='ide'/>
+      <readonly/>
+    </disk>
+    <interface type='network'>
+      <mac address='52:54:00:12:34:56'/>
+      <source network='default'/>
+      <model type='virtio'/>
+    </interface>
+    <graphics type='vnc' port='-1' autoport='yes'/>
+  </devices>
+</domain>
