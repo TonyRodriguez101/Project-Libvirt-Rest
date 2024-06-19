@@ -3,6 +3,7 @@ import libvirt
 import os
 import requests
 import uuid
+import threading
 
 app = Flask(__name__)
 
@@ -11,69 +12,70 @@ def connect_libvirt():
 
 def ensure_iso_exists(iso_url, iso_path):
     if not os.path.exists(iso_path):
-        response = requests.get(iso_url, stream=True)
-        if response.status_code == 200:
+        try:
+            response = requests.get(iso_url, stream=True)
+            response.raise_for_status()
             with open(iso_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=1024):
                     if chunk:
                         f.write(chunk)
+            print(f'ISO downloaded successfully: {iso_path}')
             return True
-        else:
+        except requests.RequestException as e:
+            print(f'Failed to download ISO: {e}')
             return False
+    else:
+        print(f'ISO already exists: {iso_path}')
     return True
 
-
-#-------------------------------------------------
-# Others ISOs_URL and ISO_PATH
-# ISO_URL = 'https://releases.ubuntu.com/20.04.3/ubuntu-20.04.3-live-server-amd64.iso'
-# ISO_PATH = '/var/lib/libvirt/images/ubuntu-20.04.3-live-server-amd64.iso'
-
-# ISO_URL = 'https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-11.1.0-amd64-netinst.iso'
-# ISO_PATH = '/var/lib/libvirt/images/debian-11.1.0-amd64-netinst.iso'  
-
-# Ubuntu 22.04.4   ISO
 ISO_URL = 'https://mirror.leitecastro.com/ubuntu-releases/22.04.4/ubuntu-22.04.4-desktop-amd64.iso'
 ISO_PATH = '/var/lib/libvirt/images/ubuntu-22.04.4-desktop-amd64.iso'
 
-
-
-# ISO_URL = 'https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-standard-3.20.1-x86_64.iso'
-# ISO_PATH = '/var/lib/libvirt/images/alpine-standard-3.20.1-x86_64.iso'
-
 def create_disk_image(disk_path, size_gb):
-    os.system(f'qemu-img create -f qcow2 {disk_path} {size_gb}G') 
+    os.system(f'qemu-img create -f qcow2 {disk_path} {size_gb}G')
 
-def generate_vm_xml(vm_name, disk_path):
+def generate_vm_xml(vm_name, disk_path, iso_path=ISO_PATH):
     return f"""
     <domain type='kvm'>
       <name>{vm_name}</name>
-      <memory unit='KiB'>4194304</memory> --> 4GB
-      <vcpu placement='static'>3</vcpu> --> 3 cores
+      <memory unit='KiB'>4194304</memory>
+      <vcpu placement='static'>3</vcpu>
       <os>
-        <type arch='x86_64' machine='pc-i440fx-2.9'>hvm</type> --> x86_64 architecture and hvm type
-        <boot dev='cdrom'/> --> boot from cdrom 
+        <type arch='x86_64' machine='pc-i440fx-2.9'>hvm</type>
+        <boot dev='cdrom'/>
       </os>
       <devices>
-        <disk type='file' device='disk'> --> disk type file and device disk
-          <driver name='qemu' type='qcow2'/> --> driver name qemu and type qcow2
-          <source file='{disk_path}'/> 
-          <target dev='vda' bus='virtio'/> --> target device vda and bus virtio  
+        <disk type='file' device='disk'>
+          <driver name='qemu' type='qcow2'/>
+          <source file='{disk_path}'/>
+          <target dev='vda' bus='virtio'/>
         </disk>
-        <disk type='file' device='cdrom'> 
-          <driver name='qemu' type='raw'/> 
-          <source file='{ISO_PATH}'/>  --> source file iso path
+        <disk type='file' device='cdrom'>
+          <driver name='qemu' type='raw'/>
+          <source file='{iso_path}'/>
           <target dev='hdc' bus='ide'/>
-          <readonly/>  --> read only
+          <readonly/>
         </disk>
-        <interface type='network'> 
-          <mac address='52:54:00:{uuid.uuid4().hex[:2]}:{uuid.uuid4().hex[:2]}:{uuid.uuid4().hex[:2]}'/> --> mac address
-          <source network='default'/> 
-          <model type='virtio'/> 
+        <interface type='network'>
+          <mac address='52:54:00:{uuid.uuid4().hex[:2]}:{uuid.uuid4().hex[:2]}:{uuid.uuid4().hex[:2]}'/>
+          <source network='default'/>
+          <model type='virtio'/>
         </interface>
-        <graphics type='vnc' port='-1' autoport='yes'/> 
+        <graphics type='vnc' port='-1' autoport='yes'/>
       </devices>
     </domain>
     """
+
+def create_vm_in_background(vm_name, disk_path, config_xml):
+    conn = connect_libvirt()
+    try:
+        dom = conn.defineXML(config_xml)  # Define the VM in libvirt
+        dom.create()  # Start the VM
+        print(f'VM {vm_name} created successfully')
+        conn.close()
+    except libvirt.libvirtError as e:
+        print(f'Failed to create VM {vm_name}: {str(e)}')
+        conn.close()
 
 @app.route('/vms', methods=['POST'])
 def create_vm():
@@ -85,19 +87,41 @@ def create_vm():
         return 'Failed to download ISO', 500
 
     # Create a new disk image
-    create_disk_image(disk_path, 30)  # Create a 40GB disk image
+    create_disk_image(disk_path, 30)  # Create a 30GB disk image
 
     # Generate VM XML configuration
-    config_xml = generate_vm_xml(vm_name, disk_path) 
+    config_xml = generate_vm_xml(vm_name, disk_path)
 
+    # Run VM creation in a background thread
+    threading.Thread(target=create_vm_in_background, args=(vm_name, disk_path, config_xml)).start()
+
+    return 'VM creation started', 202
+
+#-------------------------------------------------
+# UnMount ISO and change boot configuration
+@app.route('/vms/<vm_name>/unmount_iso', methods=['POST'])
+def unmount_iso(vm_name):
     conn = connect_libvirt()
-    try:
-        conn.createXML(config_xml, 0)
+    domain = conn.lookupByName(vm_name)
+    if not domain:
         conn.close()
-        return 'VM created', 201
+        return 'VM not found', 404
+
+    # Get the current XML configuration
+    current_xml = domain.XMLDesc(0)
+
+    # Modify the boot device to the disk and remove the ISO source
+    new_xml = current_xml.replace(f"<source file='{ISO_PATH}'/>", "<source file=''/>").replace("<boot dev='cdrom'/>", "<boot dev='hd'/>")
+
+    try:
+        # Update the VM configuration
+        domain.undefine()
+        conn.defineXML(new_xml)
+        conn.close()
+        return 'ISO unmounted and boot configuration changed', 200
     except libvirt.libvirtError as e:
         conn.close()
-        return f'Failed to create VM: {str(e)}', 400
+        return f'Failed to update VM configuration: {str(e)}', 400
 
 #-------------------------------------------------
 # List VMs
@@ -122,9 +146,9 @@ def delete_vm(vm_name):
     conn = connect_libvirt()
     domain = conn.lookupByName(vm_name)
     if domain:
-        domain.undefine()
         if domain.isActive():
             domain.destroy()
+        domain.undefine()
         conn.close()
         # Optionally delete the disk file
         disk_path = f'/var/lib/libvirt/images/{vm_name}.qcow2'
@@ -150,15 +174,19 @@ def start_vm(vm_name):
         return 'VM not found', 404
 
 #-------------------------------------------------
-# Stop VM
+# Stop VM definitively (power off)
 @app.route('/vms/<vm_name>/stop', methods=['POST'])
 def stop_vm(vm_name):
     conn = connect_libvirt()
     domain = conn.lookupByName(vm_name)
     if domain:
-        domain.shutdown()
-        conn.close()
-        return 'VM stopped', 200
+        try:
+            domain.destroy()
+            conn.close()
+            return 'VM stopped', 200
+        except libvirt.libvirtError as e:
+            conn.close()
+            return f'Failed to stop VM: {str(e)}', 500
     else:
         conn.close()
         return 'VM not found', 404

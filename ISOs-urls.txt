@@ -1,0 +1,21 @@
+
+#-------------------------------------------------
+# Others ISOs_URL and ISO_PATH
+# ISO_URL = 'https://releases.ubuntu.com/20.04.3/ubuntu-20.04.3-live-server-amd64.iso'
+# ISO_PATH = '/var/lib/libvirt/images/ubuntu-20.04.3-live-server-amd64.iso'
+
+# ISO_URL = 'https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-11.1.0-amd64-netinst.iso'
+# ISO_PATH = '/var/lib/libvirt/images/debian-11.1.0-amd64-netinst.iso'  
+
+# LINUX MINT 
+ISO_URL = 'https://mirrors.kernel.org/linuxmint/stable/20.2/linuxmint-20.2-cinnamon-64bit.iso'
+ISO_PATH = '/var/lib/libvirt/images/linuxmint-20.2-cinnamon-64bit.iso'
+
+# Ubuntu 22.04.4   ISO
+# ISO_URL = 'https://mirror.leitecastro.com/ubuntu-releases/22.04.4/ubuntu-22.04.4-desktop-amd64.iso'
+# ISO_PATH = '/var/lib/libvirt/images/ubuntu-22.04.4-desktop-amd64.iso'
+
+
+
+# ISO_URL = 'https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-standard-3.20.1-x86_64.iso'
+# ISO_PATH = '/var/lib/libvirt/images/alpine-standard-3.20.1-x86_64.iso'
