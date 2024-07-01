@@ -1,10 +1,11 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import libvirt
 import os
 import uuid
 import threading
 import subprocess
 import tarfile
+from pathlib import Path
 
 app = Flask(__name__)
 
@@ -330,6 +331,12 @@ def start_vm(vm_name):
         conn.close()
         return 'VM not found', 404
 
+    disk_path = f'/var/lib/libvirt/images/{vm_name}.qcow2'  # Construye la ruta del disco duro correctamente
+
+    if not os.path.exists(disk_path):
+        conn.close()
+        return 'Disk image not found', 404
+
     try:
         domain.create()
         conn.close()
@@ -360,20 +367,6 @@ def stop_vm(vm_name):
         conn.close()
         return f'Failed to stop VM: {str(e)}', 400
 
-#-------------------------------------------------
-# Extraction of VM XML data configuration
-@app.route('/vms/<vm_name>/xml', methods=['GET'])
-def get_vm_xml(vm_name):
-    conn = connect_libvirt()
-    try:
-        domain = conn.lookupByName(vm_name)
-    except libvirt.libvirtError:
-        conn.close()
-        return 'VM not found', 404
-
-    xml = domain.XMLDesc(0)
-    conn.close()
-    return xml, 200
 
 #-------------------------------------------------
 # Export VM
@@ -395,13 +388,69 @@ def export_vm(vm_name):
         conn.close()
         return 'Disk image not found', 404
 
-    # Write XML to a file
-    xml_file_path = f'/mnt/data/{vm_name}.xml'
+    # Determine the user's desktop directory
+    home_dir = Path.home()
+    desktop_dir = home_dir / 'Desktop'
+    if not desktop_dir.exists():
+        desktop_dir = home_dir / 'Escritorio'
+        if not desktop_dir.exists():
+            conn.close()
+            return 'Desktop directory not found', 404
+
+    # Create temporary files on the desktop
+    xml_file_path = desktop_dir / f'{vm_name}.xml'
+    with open(xml_file_path, 'w') as xml_file:
+        xml_file.write(xml_desc)
+
+    # Create a tar archive containing both the XML and QCOW2 files
+    tar_path = desktop_dir / f'{vm_name}.tar'
+    with tarfile.open(tar_path, 'w') as tar:
+        tar.add(xml_file_path, arcname=f'{vm_name}.xml')
+        tar.add(disk_path, arcname=f'{vm_name}.qcow2')
+
+    # Clean up temporary files
+    os.remove(xml_file_path)
+
+    conn.close()
+    return f'VM exported to {tar_path}', 200
+
+
+#-------------------------------------------------
+# Export VM Compressed tar.gz
+@app.route('/vms/<vm_name>/exportCompressed', methods=['GET'])
+def exportCompressed_vm(vm_name):
+    conn = connect_libvirt()
+    try:
+        domain = conn.lookupByName(vm_name)
+    except libvirt.libvirtError:
+        conn.close()
+        return 'VM not found', 404
+
+    if domain.isActive():
+        return 'VM must be stopped before export', 400
+
+    xml_desc = domain.XMLDesc(0)
+    disk_path = f'/var/lib/libvirt/images/{vm_name}.qcow2'
+    if not os.path.exists(disk_path):
+        conn.close()
+        return 'Disk image not found', 404
+
+    # Determine the user's desktop directory
+    home_dir = Path.home()
+    desktop_dir = home_dir / 'Desktop'
+    if not desktop_dir.exists():
+        desktop_dir = home_dir / 'Escritorio'
+        if not desktop_dir.exists():
+            conn.close()
+            return 'Desktop directory not found', 404
+
+    # Create temporary files on the desktop
+    xml_file_path = desktop_dir / f'{vm_name}.xml'
     with open(xml_file_path, 'w') as xml_file:
         xml_file.write(xml_desc)
 
     # Create a tar.gz archive containing both the XML and QCOW2 files
-    tar_path = f'/mnt/data/{vm_name}.tar.gz'
+    tar_path = desktop_dir / f'{vm_name}.tar.gz'
     with tarfile.open(tar_path, 'w:gz') as tar:
         tar.add(xml_file_path, arcname=f'{vm_name}.xml')
         tar.add(disk_path, arcname=f'{vm_name}.qcow2')
@@ -413,39 +462,181 @@ def export_vm(vm_name):
     return f'VM exported to {tar_path}', 200
 
 #-------------------------------------------------
+#-------------------------------------------------
 # Import VM
 @app.route('/vms/import', methods=['POST'])
 def import_vm():
-    vm_name = request.json.get('name')
-    if not vm_name:
-        return 'VM name is required', 400
+    conn = connect_libvirt()
+    if 'file' not in request.files:
+        return 'No file part', 400
 
-    tar_path = f'/mnt/data/{vm_name}.tar.gz'
+    file = request.files['file']
+    if file.filename == '':
+        return 'No selected file', 400
 
-    if not os.path.exists(tar_path):
-        return 'Archive not found', 404
+    home_dir = Path.home()
+    desktop_dir = home_dir / 'Desktop'
+    if not desktop_dir.exists():
+        desktop_dir = home_dir / 'Escritorio'
+        if not desktop_dir.exists():
+            conn.close()
+            return 'Desktop directory not found', 404
 
-    # Extract the tar.gz archive
-    with tarfile.open(tar_path, 'r:gz') as tar:
-        tar.extractall(path='/mnt/data/')
+    # Save the uploaded tar file to a temporary location
+    temp_tar_path = desktop_dir / file.filename
+    file.save(temp_tar_path)
 
-    xml_path = f'/mnt/data/{vm_name}.xml'
-    disk_path = f'/mnt/data/{vm_name}.qcow2'
-    if not os.path.exists(xml_path) or not os.path.exists(disk_path):
-        return 'XML or disk image not found after extraction', 404
+    # Extract the tar file
+    extracted_files = []
+    try:
+        with tarfile.open(temp_tar_path, 'r') as tar:
+            tar.extractall(path=desktop_dir)
+            extracted_files = tar.getnames()  # Get list of extracted file names
+    except tarfile.TarError as e:
+        os.remove(temp_tar_path)
+        conn.close()
+        return f'Failed to extract tar file: {str(e)}', 500
 
-    with open(xml_path, 'r') as xml_file:
+    # Locate the XML and QCOW2 files
+    xml_file_path = None
+    qcow2_file_path = None
+    for file_name in extracted_files:
+        if file_name.endswith('.xml'):
+            xml_file_path = desktop_dir / file_name
+        elif file_name.endswith('.qcow2'):
+            qcow2_file_path = desktop_dir / file_name
+
+    if not xml_file_path or not qcow2_file_path:
+        os.remove(temp_tar_path)
+        conn.close()
+        return 'Invalid tar file contents', 400
+
+    # Read the XML file
+    with open(xml_file_path, 'r') as xml_file:
         xml_desc = xml_file.read()
 
-    conn = connect_libvirt()
+    # Define the new VM using the XML description
     try:
-        conn.defineXML(xml_desc)
-        os.system(f'mv {disk_path} /var/lib/libvirt/images/{vm_name}.qcow2')
-        conn.close()
-        return 'VM imported successfully', 200
+        domain = conn.defineXML(xml_desc)
     except libvirt.libvirtError as e:
+        os.remove(temp_tar_path)
+        os.remove(xml_file_path)
+        os.remove(qcow2_file_path)
         conn.close()
-        return f'Failed to import VM: {str(e)}', 400
+        return f'Failed to define VM: {str(e)}', 500
+
+    # Move the QCOW2 file to the appropriate location
+    vm_name = domain.name()
+    dest_qcow2_path = Path(f'/var/lib/libvirt/images/{vm_name}.qcow2')
+    os.rename(qcow2_file_path, dest_qcow2_path)
+
+    # Update the XML to reference the new disk location
+    domain.undefine()  # Undefine the VM temporarily to update the XML
+    updated_xml_desc = xml_desc.replace(str(qcow2_file_path), str(dest_qcow2_path))
+    try:
+        domain = conn.defineXML(updated_xml_desc)
+    except libvirt.libvirtError as e:
+        os.remove(temp_tar_path)
+        os.remove(xml_file_path)
+        os.remove(dest_qcow2_path)
+        conn.close()
+        return f'Failed to redefine VM: {str(e)}', 500
+
+    # Clean up temporary files
+    # os.remove(temp_tar_path) # activate this line if you want to remove the tar file after import
+    os.remove(xml_file_path)
+
+    conn.close()
+    return f'VM {vm_name} imported successfully', 200
+
+
+
+#-------------------------------------------------
+# Import VM Compressed tar.gz
+@app.route('/vms/importCompressed', methods=['POST'])
+def importCompressed_vm():
+    conn = connect_libvirt()
+    if 'file' not in request.files:
+        return 'No file part', 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return 'No selected file', 400
+
+    home_dir = Path.home()
+    desktop_dir = home_dir / 'Desktop'
+    if not desktop_dir.exists():
+        desktop_dir = home_dir / 'Escritorio'
+        if not desktop_dir.exists():
+            conn.close()
+            return 'Desktop directory not found', 404
+
+    # Save the uploaded tar.gz file to a temporary location
+    temp_tar_path = desktop_dir / file.filename
+    file.save(temp_tar_path)
+
+    # Extract the tar.gz file
+    extracted_files = []
+    try:
+        with tarfile.open(temp_tar_path, 'r:gz') as tar:
+            tar.extractall(path=desktop_dir)
+            extracted_files = tar.getnames()  # Get list of extracted file names
+    except tarfile.TarError as e:
+        os.remove(temp_tar_path)
+        conn.close()
+        return f'Failed to extract tar.gz file: {str(e)}', 500
+
+    # Locate the XML and QCOW2 files
+    xml_file_path = None
+    qcow2_file_path = None
+    for file_name in extracted_files:
+        if file_name.endswith('.xml'):
+            xml_file_path = desktop_dir / file_name
+        elif file_name.endswith('.qcow2'):
+            qcow2_file_path = desktop_dir / file_name
+
+    if not xml_file_path or not qcow2_file_path:
+        os.remove(temp_tar_path)
+        conn.close()
+        return 'Invalid tar.gz file contents', 400
+
+    # Read the XML file
+    with open(xml_file_path, 'r') as xml_file:
+        xml_desc = xml_file.read()
+
+    # Define the new VM using the XML description
+    try:
+        domain = conn.defineXML(xml_desc)
+    except libvirt.libvirtError as e:
+        os.remove(temp_tar_path)
+        os.remove(xml_file_path)
+        os.remove(qcow2_file_path)
+        conn.close()
+        return f'Failed to define VM: {str(e)}', 500
+
+    # Move the QCOW2 file to the appropriate location
+    vm_name = domain.name()
+    dest_qcow2_path = Path(f'/var/lib/libvirt/images/{vm_name}.qcow2')
+    os.rename(qcow2_file_path, dest_qcow2_path)
+
+    # Update the XML to reference the new disk location
+    domain.undefine()  # Undefine the VM temporarily to update the XML
+    updated_xml_desc = xml_desc.replace(str(qcow2_file_path), str(dest_qcow2_path))
+    try:
+        domain = conn.defineXML(updated_xml_desc)
+    except libvirt.libvirtError as e:
+        os.remove(temp_tar_path)
+        os.remove(xml_file_path)
+        os.remove(dest_qcow2_path)
+        conn.close()
+        return f'Failed to redefine VM: {str(e)}', 500
+
+    # Clean up temporary files
+    # os.remove(temp_tar_path) # Optional: remove this line if you want to keep the tar.gz file
+    os.remove(xml_file_path)
+
+    conn.close()
+    return f'VM {vm_name} imported successfully', 200
 
 if __name__ == '__main__':
     app.run(debug=True)
