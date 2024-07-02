@@ -1,3 +1,4 @@
+import re # for fixing the XML multiple configurations error.
 from flask import Flask, request, jsonify, Response
 import libvirt
 import os
@@ -213,10 +214,14 @@ def create_vm():
 
     return 'VM creation started', 202
 
+
+#-------------------------------------------------
+# Modify VM
 @app.route('/vms/<vm_name>/modify', methods=['POST'])
 def modify_vm(vm_name):
     new_config = request.json
     conn = connect_libvirt()
+    
     try:
         domain = conn.lookupByName(vm_name)
     except libvirt.libvirtError:
@@ -224,35 +229,57 @@ def modify_vm(vm_name):
         return 'VM not found', 404
 
     if domain.isActive():
+        conn.close()
         return 'VM must be stopped before modification', 400
 
-    current_xml = domain.XMLDesc(0)
-
-    memory_mb = new_config.get('memory_mb')
-    vcpu_count = new_config.get('vcpu_count')
-
-    if memory_mb:
-        new_memory_element = f"<memory unit='KiB'>{memory_mb * 1024}</memory>"
-        current_xml = current_xml.replace(
-            f"<memory unit='KiB'>{domain.maxMemory()}</memory>", 
-            new_memory_element
-        )
-
-    if vcpu_count:
-        new_vcpu_element = f"<vcpu placement='static'>{vcpu_count}</vcpu>"
-        current_xml = current_xml.replace(
-            f"<vcpu placement='static'>{domain.maxVcpus()}</vcpu>", 
-            new_vcpu_element
-        )
-
     try:
+        # Obtener el XML actual de la máquina virtual
+        current_xml = domain.XMLDesc(0)
+
+        # Modificar la memoria RAM si se proporciona en el JSON
+        if 'memory_mb' in new_config:
+            memory_mb = new_config['memory_mb']
+            new_memory_element = f"<memory unit='KiB'>{memory_mb * 1024}</memory>"
+            current_xml = re.sub(r"<memory unit='KiB'>\d+</memory>", new_memory_element, current_xml)
+            new_current_memory_element = f"<currentMemory unit='KiB'>{memory_mb * 1024}</currentMemory>"
+            current_xml = re.sub(r"<currentMemory unit='KiB'>\d+</currentMemory>", new_current_memory_element, current_xml)
+
+        # Modificar el número de CPUs si se proporciona en el JSON
+        if 'vcpu_count' in new_config:
+            vcpu_count = new_config['vcpu_count']
+            new_vcpu_element = f"<vcpu placement='static'>{vcpu_count}</vcpu>"
+            current_xml = re.sub(r"<vcpu placement='static'>\d+</vcpu>", new_vcpu_element, current_xml)
+
+        # Modificar el espacio del disco duro si se proporciona en el JSON
+        if 'disk_size_gb' in new_config:
+            disk_size_gb = new_config['disk_size_gb']
+            disk_path = f"/var/lib/libvirt/images/{vm_name}.qcow2"
+            os.system(f"qemu-img resize {disk_path} {disk_size_gb}G")
+
+        # Modificar el nombre de la VM si se proporciona en el JSON
+        if 'new_name' in new_config:
+            new_name = new_config['new_name']
+            current_xml = current_xml.replace(f"<name>{vm_name}</name>", f"<name>{new_name}</name>")
+
+            old_disk_path = f"/var/lib/libvirt/images/{vm_name}.qcow2"
+            new_disk_path = f"/var/lib/libvirt/images/{new_name}.qcow2"
+            if os.path.exists(old_disk_path):
+                os.rename(old_disk_path, new_disk_path)
+            
+            current_xml = current_xml.replace(f"<source file='/var/lib/libvirt/images/{vm_name}.qcow2'/>", f"<source file='/var/lib/libvirt/images/{new_name}.qcow2'/>")
+
+        # Definir el nuevo XML de la máquina virtual
         domain.undefine()
-        conn.defineXML(current_xml)
+        domain = conn.defineXML(current_xml)
+
         conn.close()
         return 'VM modified successfully', 200
+
     except libvirt.libvirtError as e:
         conn.close()
-        return f'Failed to modify VM configuration: {str(e)}', 400
+        return f'Failed to modify VM configuration: {str(e)}', 500
+
+
 
 #-------------------------------------------------
 # UnMount ISO
