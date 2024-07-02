@@ -1,1 +1,250 @@
-{"id":16204,"uuid":"07344816-38cd-44da-ac50-b034da9bf438","user_id":11451,"filename":"scripts.py","source":"Multiple","generated":"# \ud83d\udcdc Virtual Machine Manager API Documentation\n\nWelcome to the Virtual Machine Manager API documentation! This API provides a set of endpoints for managing virtual machines (VMs) using `libvirt` and `qemu`. You can create, modify, start, stop, delete, export, import, and list VMs with this API.\n\n## \ud83d\udcd1 Index\n\n1. [Overview](#overview)\n2. [Endpoints](#endpoints)\n    - [Create VM](#create-vm)\n    - [Modify VM](#modify-vm)\n    - [Unmount ISO](#unmount-iso)\n    - [List VMs](#list-vms)\n    - [Delete VM](#delete-vm)\n    - [Start VM](#start-vm)\n    - [Stop VM](#stop-vm)\n    - [Export VM](#export-vm)\n    - [Export VM Compressed](#export-vm-compressed)\n    - [Import VM](#import-vm)\n    - [Import VM Compressed](#import-vm-compressed)\n\n---\n\n## Overview\n\nThis API is built using Flask and provides functionalities to manage virtual machines using the `libvirt` library. The virtual machines are defined and managed using XML configurations. \n\n---\n\n## Endpoints\n\n### Create VM\n\n- **Endpoint:** `\/vms`\n- **Method:** `POST`\n- **Description:** Create a new virtual machine.\n- **Payload:**\n    ```json\n    {\n        \"name\": \"vm-name\",\n        \"iso_url\": \"http:\/\/path\/to\/iso\",\n        \"disk_size_gb\": 30,\n        \"memory_mb\": 4096,\n        \"vcpu_count\": 2\n    }\n    ```\n- **Response:** \n    - **Success:** `202 Accepted - \"VM creation started\"`\n    - **Failure:** `500 Internal Server Error - \"Failed to download ISO\"`\n\n**Example:**\n\n```bash\ncurl -X POST http:\/\/localhost:5000\/vms -H \"Content-Type: application\/json\" -d '{\n  \"name\": \"test-vm\",\n  \"iso_url\": \"http:\/\/example.com\/test.iso\",\n  \"disk_size_gb\": 20,\n  \"memory_mb\": 2048,\n  \"vcpu_count\": 2\n}'\n```\n\n---\n\n### Modify VM\n\n- **Endpoint:** `\/vms\/<vm_name>\/modify`\n- **Method:** `POST`\n- **Description:** Modify an existing virtual machine.\n- **Payload:**\n    ```json\n    {\n        \"memory_mb\": 8192,\n        \"vcpu_count\": 4,\n        \"disk_size_gb\": 40,\n        \"new_name\": \"new-vm-name\"\n    }\n    ```\n- **Response:** \n    - **Success:** `200 OK - \"VM modified successfully\"`\n    - **Failure:** `404 Not Found - \"VM not found\"`\n    - **Failure:** `400 Bad Request - \"VM must be stopped before modification\"`\n    - **Failure:** `500 Internal Server Error - \"Failed to modify VM configuration\"`\n\n**Example:**\n\n```bash\ncurl -X POST http:\/\/localhost:5000\/vms\/test-vm\/modify -H \"Content-Type: application\/json\" -d '{\n  \"memory_mb\": 8192,\n  \"vcpu_count\": 4,\n  \"disk_size_gb\": 40,\n  \"new_name\": \"test-vm-modified\"\n}'\n```\n\n---\n\n### Unmount ISO\n\n- **Endpoint:** `\/vms\/<vm_name>\/unmount_iso`\n- **Method:** `POST`\n- **Description:** Unmount the ISO from the virtual machine.\n- **Response:** \n    - **Success:** `200 OK - \"ISO unmounted and VM configuration updated\"`\n    - **Failure:** `404 Not Found - \"VM not found\"`\n    - **Failure:** `400 Bad Request - \"No CDROM device found\"`\n    - **Failure:** `400 Bad Request - \"Failed to update VM configuration\"`\n\n**Example:**\n\n```bash\ncurl -X POST http:\/\/localhost:5000\/vms\/test-vm\/unmount_iso\n```\n\n---\n\n### List VMs\n\n- **Endpoint:** `\/vms`\n- **Method:** `GET`\n- **Description:** List all virtual machines.\n- **Response:** `200 OK` with a JSON array of VMs.\n\n**Example:**\n\n```bash\ncurl -X GET http:\/\/localhost:5000\/vms\n```\n\n---\n\n### Delete VM\n\n- **Endpoint:** `\/vms\/<vm_name>`\n- **Method:** `DELETE`\n- **Description:** Delete a virtual machine.\n- **Response:** \n    - **Success:** `204 No Content - \"VM deleted\"`\n    - **Failure:** `404 Not Found - \"VM not found\"`\n\n**Example:**\n\n```bash\ncurl -X DELETE http:\/\/localhost:5000\/vms\/test-vm\n```\n\n---\n\n### Start VM\n\n- **Endpoint:** `\/vms\/<vm_name>\/start`\n- **Method:** `POST`\n- **Description:** Start a virtual machine.\n- **Response:** \n    - **Success:** `200 OK - \"VM started\"`\n    - **Failure:** `404 Not Found - \"VM not found\"`\n    - **Failure:** `404 Not Found - \"Disk image not found\"`\n    - **Failure:** `400 Bad Request - \"Failed to start VM\"`\n\n**Example:**\n\n```bash\ncurl -X POST http:\/\/localhost:5000\/vms\/test-vm\/start\n```\n\n---\n\n### Stop VM\n\n- **Endpoint:** `\/vms\/<vm_name>\/stop`\n- **Method:** `POST`\n- **Description:** Stop a virtual machine.\n- **Response:** \n    - **Success:** `200 OK - \"VM stopped\"`\n    - **Failure:** `404 Not Found - \"VM not found\"`\n    - **Failure:** `400 Bad Request - \"Failed to stop VM\"`\n\n**Example:**\n\n```bash\ncurl -X POST http:\/\/localhost:5000\/vms\/test-vm\/stop\n```\n\n---\n\n### Export VM\n\n- **Endpoint:** `\/vms\/<vm_name>\/export`\n- **Method:** `GET`\n- **Description:** Export a virtual machine to a tar file.\n- **Response:** \n    - **Success:** `200 OK - \"VM exported to \/path\/to\/tar\"`\n    - **Failure:** `404 Not Found - \"VM not found\"`\n    - **Failure:** `404 Not Found - \"Disk image not found\"`\n    - **Failure:** `400 Bad Request - \"VM must be stopped before export\"`\n    - **Failure:** `404 Not Found - \"Desktop directory not found\"`\n\n**Example:**\n\n```bash\ncurl -X GET http:\/\/localhost:5000\/vms\/test-vm\/export\n```\n\n---\n\n### Export VM Compressed\n\n- **Endpoint:** `\/vms\/<vm_name>\/exportCompressed`\n- **Method:** `GET`\n- **Description:** Export a virtual machine to a compressed tar.gz file.\n- **Response:** \n    - **Success:** `200 OK - \"VM exported to \/path\/to\/tar.gz\"`\n    - **Failure:** `404 Not Found - \"VM not found\"`\n    - **Failure:** `404 Not Found - \"Disk image not found\"`\n    - **Failure:** `400 Bad Request - \"VM must be stopped before export\"`\n    - **Failure:** `404 Not Found - \"Desktop directory not found\"`\n\n**Example:**\n\n```bash\ncurl -X GET http:\/\/localhost:5000\/vms\/test-vm\/exportCompressed\n```\n\n---\n\n### Import VM\n\n- **Endpoint:** `\/vms\/import`\n- **Method:** `POST`\n- **Description:** Import a virtual machine from a tar file.\n- **Payload:** Form-data with a file field containing the tar file.\n- **Response:** \n    - **Success:** `200 OK - \"VM imported successfully\"`\n    - **Failure:** `400 Bad Request - \"No file part\"`\n    - **Failure:** `400 Bad Request - \"No selected file\"`\n    - **Failure:** `404 Not Found - \"Desktop directory not found\"`\n    - **Failure:** `500 Internal Server Error - \"Failed to extract tar file\"`\n    - **Failure:** `400 Bad Request - \"Invalid tar file contents\"`\n    - **Failure:** `500 Internal Server Error - \"Failed to define VM\"`\n    - **Failure:** `500 Internal Server Error - \"Failed to redefine VM\"`\n\n**Example:**\n\n```bash\ncurl -X POST http:\/\/localhost:5000\/vms\/import -F \"file=@\/path\/to\/tar\"\n```\n\n---\n\n### Import VM Compressed\n\n- **Endpoint:** `\/vms\/importCompressed`\n- **Method:** `POST`\n- **Description:** Import a virtual machine from a compressed tar.gz file.\n- **Payload:** Form-data with a file field containing the tar.gz file.\n- **Response:** \n    - **Success:** `200 OK - \"VM imported successfully\"`\n    - **Failure:** `400 Bad Request - \"No file part\"`\n    - **Failure:** `400 Bad Request - \"No selected file\"`\n    - **Failure:** `404 Not Found - \"Desktop directory not found\"`\n    - **Failure:** `500 Internal Server Error - \"Failed to extract tar.gz file\"`\n    - **Failure:** `400 Bad Request - \"Invalid tar.gz file contents\"`\n    - **Failure:** `500 Internal Server Error - \"Failed to define VM\"`\n    - **Failure:** `500 Internal Server Error - \"Failed to redefine VM\"`\n\n**Example:**\n\n```bash\ncurl -X POST http:\/\/localhost:5000\/vms\/importCompressed -F \"file=@\/path\/to\/tar.gz\"\n```\n\n---\n\n## \u2699\ufe0f Setup\n\nTo set up the API, follow these steps:\n\n1. Clone the repository.\n2. Install the required packages:\n    ```bash\n    pip install flask libvirt-python\n    ```\n3. Run the Flask app:\n    ```bash\n    python scripts.py\n    ```\n\n## \ud83d\ude80 Usage\n\nUse the above endpoints to manage your virtual machines. Make sure to provide the required data in the correct format. \n\nHappy VM managing! \ud83d\udda5\ufe0f\u2728","created_at":"2024-07-02T05:28:47.000000Z","updated_at":"2024-07-02T05:28:47.000000Z","deleted_at":null,"model_type":1,"generation_type":0,"generation_from":0,"tag":null,"archived":0}
+# Virtual Machine Management API Documentation 📚🚀
+
+## Table of Contents
+1. [Introduction](#introduction)
+2. [Setup](#setup)
+3. [API Endpoints](#api-endpoints)
+   1. [Create VM](#create-vm)
+   2. [Modify VM](#modify-vm)
+   3. [Unmount ISO](#unmount-iso)
+   4. [List VMs](#list-vms)
+   5. [Delete VM](#delete-vm)
+   6. [Start VM](#start-vm)
+   7. [Stop VM](#stop-vm)
+   8. [Export VM](#export-vm)
+   9. [Export Compressed VM](#export-compressed-vm)
+   10. [Import VM](#import-vm)
+   11. [Import Compressed VM](#import-compressed-vm)
+4. [Utility Functions](#utility-functions)
+5. [Conclusion](#conclusion)
+
+---
+
+## Introduction
+
+Welcome to the **Virtual Machine Management API** documentation! This document provides a comprehensive guide to using the API for managing virtual machines using **libvirt** and **Flask**. This API allows you to create, modify, start, stop, export, and import virtual machines (VMs) easily.
+
+## Setup
+
+To set up this API, please ensure you have the following requirements installed:
+
+- Python 3.x
+- Flask
+- libvirt
+- qemu-img
+- wget
+- virt-viewer
+
+**Installation:**
+```bash
+pip install flask libvirt-python
+```
+
+## API Endpoints
+
+### 1. Create VM
+
+**Endpoint:** `/vms`  
+**Method:** `POST`  
+**Description:** Creates a new VM.
+
+#### Request Body Parameters:
+- `name` (optional): Name of the VM.
+- `iso_url` (required): URL of the ISO image.
+- `disk_size_gb` (optional): Size of the disk in GB (default: 30).
+- `memory_mb` (optional): Memory in MB (default: 4096).
+- `vcpu_count` (optional): Number of VCPUs (default: 2).
+
+#### Example Request:
+```json
+{
+    "name": "test-vm",
+    "iso_url": "http://example.com/path/to/iso",
+    "disk_size_gb": 40,
+    "memory_mb": 8192,
+    "vcpu_count": 4
+}
+```
+
+**Response:**
+- `202`: VM creation started.
+- `500`: Failed to download ISO.
+
+### 2. Modify VM
+
+**Endpoint:** `/vms/<vm_name>/modify`  
+**Method:** `POST`  
+**Description:** Modifies the configuration of an existing VM.
+
+#### Request Body Parameters:
+- `memory_mb` (optional): New memory size in MB.
+- `vcpu_count` (optional): New number of VCPUs.
+- `disk_size_gb` (optional): New disk size in GB.
+- `new_name` (optional): New name for the VM.
+
+#### Example Request:
+```json
+{
+    "memory_mb": 16384,
+    "vcpu_count": 8,
+    "disk_size_gb": 60,
+    "new_name": "new-vm-name"
+}
+```
+
+**Response:**
+- `200`: VM modified successfully.
+- `400`: VM must be stopped before modification.
+- `404`: VM not found.
+- `500`: Failed to modify VM configuration.
+
+### 3. Unmount ISO
+
+**Endpoint:** `/vms/<vm_name>/unmount_iso`  
+**Method:** `POST`  
+**Description:** Unmounts the ISO image from the specified VM.
+
+**Response:**
+- `200`: ISO unmounted and VM configuration updated.
+- `400`: No CDROM device found.
+- `404`: VM not found.
+
+### 4. List VMs
+
+**Endpoint:** `/vms`  
+**Method:** `GET`  
+**Description:** Lists all VMs along with their IDs, names, and states.
+
+**Response:** JSON array of VMs.
+
+#### Example Response:
+```json
+[
+    {
+        "id": 1,
+        "name": "vm-123",
+        "state": 1
+    },
+    {
+        "id": 2,
+        "name": "vm-456",
+        "state": 3
+    }
+]
+```
+
+### 5. Delete VM
+
+**Endpoint:** `/vms/<vm_name>`  
+**Method:** `DELETE`  
+**Description:** Deletes the specified VM and its associated disk image.
+
+**Response:**
+- `204`: VM deleted.
+- `404`: VM not found.
+
+### 6. Start VM
+
+**Endpoint:** `/vms/<vm_name>/start`  
+**Method:** `POST`  
+**Description:** Starts the specified VM.
+
+**Response:**
+- `200`: VM started.
+- `404`: VM or disk image not found.
+- `400`: Failed to start VM.
+
+### 7. Stop VM
+
+**Endpoint:** `/vms/<vm_name>/stop`  
+**Method:** `POST`  
+**Description:** Stops the specified VM.
+
+**Response:**
+- `200`: VM stopped.
+- `404`: VM not found.
+- `400`: Failed to stop VM.
+
+### 8. Export VM
+
+**Endpoint:** `/vms/<vm_name>/export`  
+**Method:** `GET`  
+**Description:** Exports the specified VM to the user's desktop as a tar file.
+
+**Response:**
+- `200`: VM exported.
+- `404`: VM or disk image not found.
+- `400`: VM must be stopped before export.
+
+### 9. Export Compressed VM
+
+**Endpoint:** `/vms/<vm_name>/exportCompressed`  
+**Method:** `GET`  
+**Description:** Exports the specified VM to the user's desktop as a compressed tar.gz file.
+
+**Response:**
+- `200`: VM exported.
+- `404`: VM or disk image not found.
+- `400`: VM must be stopped before export.
+
+### 10. Import VM
+
+**Endpoint:** `/vms/import`  
+**Method:** `POST`  
+**Description:** Imports a VM from a tar file.
+
+**Request Form Data:**
+- `file` (required): The tar file containing the VM's configuration and disk image.
+
+**Response:**
+- `200`: VM imported successfully.
+- `400`: No file part or invalid tar file contents.
+- `500`: Failed to define VM or extract tar file.
+
+### 11. Import Compressed VM
+
+**Endpoint:** `/vms/importCompressed`  
+**Method:** `POST`  
+**Description:** Imports a VM from a compressed tar.gz file.
+
+**Request Form Data:**
+- `file` (required): The tar.gz file containing the VM's configuration and disk image.
+
+**Response:**
+- `200`: VM imported successfully.
+- `400`: No file part or invalid tar.gz file contents.
+- `500`: Failed to define VM or extract tar.gz file.
+
+## Utility Functions
+
+### `connect_libvirt()`
+
+**Description:** Establishes a connection to the libvirt daemon.
+
+**Returns:** libvirt connection object.
+
+### `ensure_iso_exists(iso_url, iso_path)`
+
+**Description:** Checks if the ISO exists at the specified path, and downloads it if necessary.
+
+### `create_disk_image(disk_path, disk_size_gb)`
+
+**Description:** Creates a disk image with the specified size.
+
+### `generate_vm_xml(vm_name, disk_path, iso_path, memory_mb, vcpu_count)`
+
+**Description:** Generates the XML configuration for the VM.
+
+### `create_vm_in_background(vm_name, config_xml)`
+
+**Description:** Creates the VM in the background using a separate thread.
+
+## Conclusion
+
+The **Virtual Machine Management API** provides a powerful and convenient way to manage virtual machines using HTTP requests. By following this documentation, you should be able to easily create, modify, start, stop, export, and import VMs. Happy VM managing! 🎉
+
+**Note:** Always ensure you have appropriate permissions and configurations set up in your environment to avoid any issues during VM management.
+
+---
+
+If you encounter any issues or have questions, feel free to reach out!
