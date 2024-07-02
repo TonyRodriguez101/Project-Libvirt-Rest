@@ -1,33 +1,37 @@
 import re # for fixing the XML multiple configurations error.
 from flask import Flask, request, jsonify, Response
-import libvirt
-import os
-import uuid
-import threading
-import subprocess
-import tarfile
-from pathlib import Path
+import libvirt 
+import os      # for running shell commands 
+import uuid     # for generating unique identifiers
+import threading # for running tasks in the background
+import subprocess # for running shell commands 
+import tarfile # for exporting and importing VMs
+from pathlib import Path # for getting the user's desktop directory
+from flask_cors import CORS # Cross-Origin Resource Sharing
 
-app = Flask(__name__)
+app = Flask(__name__) 
+CORS(app) # Enable Cross-Origin Resource Sharing
+
 
 def connect_libvirt():
-    return libvirt.open('qemu:///system')
+    return libvirt.open('qemu:///system') # Connect to the system libvirt daemon
 
 #-------------------------------------------------
 # Create VM
 #-------------------------------------------------
+
 def ensure_iso_exists(iso_url, iso_path):
-    # Verifica si el ISO existe y descárgalo si es necesario
-    if not os.path.exists(iso_path):
-        subprocess.run(['wget', iso_url, '-O', iso_path], check=True)
+    # Verifies if the ISO exists and downloads it if necessary
+    if not os.path.exists(iso_path): 
+        subprocess.run(['wget', iso_url, '-O', iso_path], check=True) 
     return os.path.exists(iso_path)
 
-def create_disk_image(disk_path, disk_size_gb):
-    # Crea una imagen de disco
-    subprocess.run(['qemu-img', 'create', '-f', 'qcow2', disk_path, f'{disk_size_gb}G'], check=True)
+def create_disk_image(disk_path, disk_size_gb): 
+    # Create a disk image
+    subprocess.run(['qemu-img', 'create', '-f', 'qcow2', disk_path, f'{disk_size_gb}G'], check=True) 
 
 def generate_vm_xml(vm_name, disk_path, iso_path, memory_mb, vcpu_count):
-    mac_address = f'52:54:00:{uuid.uuid4().hex[:2]}:{uuid.uuid4().hex[:2]}:{uuid.uuid4().hex[:2]}'
+    mac_address = f'52:54:00:{uuid.uuid4().hex[:2]}:{uuid.uuid4().hex[:2]}:{uuid.uuid4().hex[:2]}' # Generate a random MAC address
     return f"""
     <domain type='kvm'>
         <name>{vm_name}</name>
@@ -191,7 +195,7 @@ def create_vm_in_background(vm_name, config_xml):
 @app.route('/vms', methods=['POST'])
 def create_vm():
     vm_data = request.json
-    vm_name = vm_data.get('name', f'vm-{uuid.uuid4()}')
+    vm_name = vm_data.get('name', f'vm-{uuid.uuid4()}') # Generate a random name if not provided
     iso_url = vm_data.get('iso_url')
     disk_size_gb = vm_data.get('disk_size_gb', 30)
     memory_mb = vm_data.get('memory_mb', 4096)
@@ -217,6 +221,8 @@ def create_vm():
 
 #-------------------------------------------------
 # Modify VM
+#-------------------------------------------------
+
 @app.route('/vms/<vm_name>/modify', methods=['POST'])
 def modify_vm(vm_name):
     new_config = request.json
@@ -233,10 +239,10 @@ def modify_vm(vm_name):
         return 'VM must be stopped before modification', 400
 
     try:
-        # Obtener el XML actual de la máquina virtual
+        # Obtain the current XML of the virtual machine
         current_xml = domain.XMLDesc(0)
 
-        # Modificar la memoria RAM si se proporciona en el JSON
+        # Modify the RAM if provided in the JSON
         if 'memory_mb' in new_config:
             memory_mb = new_config['memory_mb']
             new_memory_element = f"<memory unit='KiB'>{memory_mb * 1024}</memory>"
@@ -244,19 +250,19 @@ def modify_vm(vm_name):
             new_current_memory_element = f"<currentMemory unit='KiB'>{memory_mb * 1024}</currentMemory>"
             current_xml = re.sub(r"<currentMemory unit='KiB'>\d+</currentMemory>", new_current_memory_element, current_xml)
 
-        # Modificar el número de CPUs si se proporciona en el JSON
+        # Modify the number of CPUs if provided in the JSON
         if 'vcpu_count' in new_config:
             vcpu_count = new_config['vcpu_count']
             new_vcpu_element = f"<vcpu placement='static'>{vcpu_count}</vcpu>"
-            current_xml = re.sub(r"<vcpu placement='static'>\d+</vcpu>", new_vcpu_element, current_xml)
+            current_xml = re.sub(r"<vcpu placement='static'>\d+</vcpu>", new_vcpu_element, current_xml) # Replace the current vCPU element with the new one
 
-        # Modificar el espacio del disco duro si se proporciona en el JSON
+        # Modify the disk size if provided in the JSON
         if 'disk_size_gb' in new_config:
             disk_size_gb = new_config['disk_size_gb']
             disk_path = f"/var/lib/libvirt/images/{vm_name}.qcow2"
             os.system(f"qemu-img resize {disk_path} {disk_size_gb}G")
 
-        # Modificar el nombre de la VM si se proporciona en el JSON
+        # Modify the VM name if provided in the JSON and rename the disk image
         if 'new_name' in new_config:
             new_name = new_config['new_name']
             current_xml = current_xml.replace(f"<name>{vm_name}</name>", f"<name>{new_name}</name>")
@@ -268,7 +274,7 @@ def modify_vm(vm_name):
             
             current_xml = current_xml.replace(f"<source file='/var/lib/libvirt/images/{vm_name}.qcow2'/>", f"<source file='/var/lib/libvirt/images/{new_name}.qcow2'/>")
 
-        # Definir el nuevo XML de la máquina virtual
+        # Define the new XML of the virtual machine
         domain.undefine()
         domain = conn.defineXML(current_xml)
 
@@ -283,6 +289,8 @@ def modify_vm(vm_name):
 
 #-------------------------------------------------
 # UnMount ISO
+#-------------------------------------------------
+
 @app.route('/vms/<vm_name>/unmount_iso', methods=['POST'])
 def unmount_iso(vm_name):
     conn = connect_libvirt()
@@ -293,11 +301,11 @@ def unmount_iso(vm_name):
         return 'VM not found', 404
 
     current_xml = domain.XMLDesc(0)
-    disk_section_start = current_xml.find("<disk type='file' device='cdrom'>")
-    disk_section_end = current_xml.find("</disk>", disk_section_start) + len("</disk>")
+    disk_section_start = current_xml.find("<disk type='file' device='cdrom'>") # Find the start of the CDROM disk section
+    disk_section_end = current_xml.find("</disk>", disk_section_start) + len("</disk>") # Find the end of the CDROM disk section
 
-    if disk_section_start != -1 and disk_section_end != -1:
-        new_xml = current_xml[:disk_section_start] + current_xml[disk_section_end:]
+    if disk_section_start != -1 and disk_section_end != -1: # If the CDROM disk section was found
+        new_xml = current_xml[:disk_section_start] + current_xml[disk_section_end:]     # Remove the CDROM disk section
     else:
         conn.close()
         return 'No CDROM device found', 400
@@ -313,22 +321,26 @@ def unmount_iso(vm_name):
 
 #-------------------------------------------------
 # List VMs
+#-------------------------------------------------
+
 @app.route('/vms', methods=['GET'])
 def list_vms():
-    conn = connect_libvirt()
-    domains = conn.listAllDomains()
+    conn = connect_libvirt()  
+    domains = conn.listAllDomains()  
     vms = []
     for domain in domains:
         vms.append({
-            'id': domain.ID(),
-            'name': domain.name(),
-            'state': domain.state()[0]
+            'id': domain.UUIDString(),  # Get UUID as string
+            'name': domain.name(),      
+            'state': domain.state()[0]  
         })
-    conn.close()
-    return jsonify(vms)
+    conn.close()  
+    return jsonify(vms)  
 
 #-------------------------------------------------
 # Delete VM
+#-------------------------------------------------
+
 @app.route('/vms/<vm_name>', methods=['DELETE'])
 def delete_vm(vm_name):
     conn = connect_libvirt()
@@ -339,16 +351,18 @@ def delete_vm(vm_name):
         return 'VM not found', 404
 
     if domain.isActive():
-        domain.destroy()
-    domain.undefine()
+        domain.destroy() # Stop the VM if it's running
+    domain.undefine() # Undefine the VM
     conn.close()
-    disk_path = f'/var/lib/libvirt/images/{vm_name}.qcow2'
+    disk_path = f'/var/lib/libvirt/images/{vm_name}.qcow2' 
     if os.path.exists(disk_path):
-        os.remove(disk_path)
+        os.remove(disk_path) # Remove the disk image
     return 'VM deleted', 204
 
 #-------------------------------------------------
 # Start VM
+#-------------------------------------------------
+
 @app.route('/vms/<vm_name>/start', methods=['POST'])
 def start_vm(vm_name):
     conn = connect_libvirt()
@@ -358,7 +372,7 @@ def start_vm(vm_name):
         conn.close()
         return 'VM not found', 404
 
-    disk_path = f'/var/lib/libvirt/images/{vm_name}.qcow2'  # Construye la ruta del disco duro correctamente
+    disk_path = f'/var/lib/libvirt/images/{vm_name}.qcow2'  # build the absolute path to the disk image
 
     if not os.path.exists(disk_path):
         conn.close()
@@ -367,7 +381,7 @@ def start_vm(vm_name):
     try:
         domain.create()
         conn.close()
-        subprocess.Popen(['virt-viewer', vm_name])
+        subprocess.Popen(['virt-viewer', vm_name]) # Open a VNC viewer to the VM
         return 'VM started', 200
     except libvirt.libvirtError as e:
         conn.close()
@@ -375,6 +389,8 @@ def start_vm(vm_name):
 
 #-------------------------------------------------
 # Stop VM
+#-------------------------------------------------
+
 @app.route('/vms/<vm_name>/stop', methods=['POST'])
 def stop_vm(vm_name):
     conn = connect_libvirt()
@@ -387,7 +403,7 @@ def stop_vm(vm_name):
     try:
         domain.destroy()
         while domain.isActive():
-            pass  # Espera hasta que la VM se apague
+            pass  # Wait for the VM to stop
         conn.close()
         return 'VM stopped', 200
     except libvirt.libvirtError as e:
@@ -397,6 +413,8 @@ def stop_vm(vm_name):
 
 #-------------------------------------------------
 # Export VM
+#-------------------------------------------------
+
 @app.route('/vms/<vm_name>/export', methods=['GET'])
 def export_vm(vm_name):
     conn = connect_libvirt()
@@ -417,21 +435,21 @@ def export_vm(vm_name):
 
     # Determine the user's desktop directory
     home_dir = Path.home()
-    desktop_dir = home_dir / 'Desktop'
+    desktop_dir = home_dir / 'Desktop' 
     if not desktop_dir.exists():
-        desktop_dir = home_dir / 'Escritorio'
+        desktop_dir = home_dir / 'Escritorio'  
         if not desktop_dir.exists():
             conn.close()
             return 'Desktop directory not found', 404
 
     # Create temporary files on the desktop
-    xml_file_path = desktop_dir / f'{vm_name}.xml'
-    with open(xml_file_path, 'w') as xml_file:
+    xml_file_path = desktop_dir / f'{vm_name}.xml'  
+    with open(xml_file_path, 'w') as xml_file: # Write the XML description to a file
         xml_file.write(xml_desc)
 
     # Create a tar archive containing both the XML and QCOW2 files
     tar_path = desktop_dir / f'{vm_name}.tar'
-    with tarfile.open(tar_path, 'w') as tar:
+    with tarfile.open(tar_path, 'w') as tar: 
         tar.add(xml_file_path, arcname=f'{vm_name}.xml')
         tar.add(disk_path, arcname=f'{vm_name}.qcow2')
 
@@ -444,6 +462,8 @@ def export_vm(vm_name):
 
 #-------------------------------------------------
 # Export VM Compressed tar.gz
+#-------------------------------------------------
+
 @app.route('/vms/<vm_name>/exportCompressed', methods=['GET'])
 def exportCompressed_vm(vm_name):
     conn = connect_libvirt()
@@ -478,7 +498,7 @@ def exportCompressed_vm(vm_name):
 
     # Create a tar.gz archive containing both the XML and QCOW2 files
     tar_path = desktop_dir / f'{vm_name}.tar.gz'
-    with tarfile.open(tar_path, 'w:gz') as tar:
+    with tarfile.open(tar_path, 'w:gz') as tar: # Create a tar.gz file
         tar.add(xml_file_path, arcname=f'{vm_name}.xml')
         tar.add(disk_path, arcname=f'{vm_name}.qcow2')
 
@@ -489,8 +509,9 @@ def exportCompressed_vm(vm_name):
     return f'VM exported to {tar_path}', 200
 
 #-------------------------------------------------
-#-------------------------------------------------
 # Import VM
+#-------------------------------------------------
+
 @app.route('/vms/import', methods=['POST'])
 def import_vm():
     conn = connect_libvirt()
@@ -525,16 +546,16 @@ def import_vm():
         return f'Failed to extract tar file: {str(e)}', 500
 
     # Locate the XML and QCOW2 files
-    xml_file_path = None
-    qcow2_file_path = None
+    xml_file_path = None # Initialize the XML file path
+    qcow2_file_path = None # Initialize the QCOW2 file path
     for file_name in extracted_files:
         if file_name.endswith('.xml'):
-            xml_file_path = desktop_dir / file_name
+            xml_file_path = desktop_dir / file_name # Build the absolute path to the XML file
         elif file_name.endswith('.qcow2'):
-            qcow2_file_path = desktop_dir / file_name
+            qcow2_file_path = desktop_dir / file_name # Build the absolute path to the QCOW2 file
 
     if not xml_file_path or not qcow2_file_path:
-        os.remove(temp_tar_path)
+        os.remove(temp_tar_path) # Remove the tar file
         conn.close()
         return 'Invalid tar file contents', 400
 
@@ -548,7 +569,7 @@ def import_vm():
     except libvirt.libvirtError as e:
         os.remove(temp_tar_path)
         os.remove(xml_file_path)
-        os.remove(qcow2_file_path)
+        os.remove(qcow2_file_path) 
         conn.close()
         return f'Failed to define VM: {str(e)}', 500
 
@@ -580,6 +601,8 @@ def import_vm():
 
 #-------------------------------------------------
 # Import VM Compressed tar.gz
+#-------------------------------------------------
+
 @app.route('/vms/importCompressed', methods=['POST'])
 def importCompressed_vm():
     conn = connect_libvirt()
