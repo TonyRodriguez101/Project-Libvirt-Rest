@@ -1,0 +1,338 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Libvirt VM Manager API",
+    "description": "API for managing virtual machines using libvirt"
+  },
+  "host": "localhost:5000",
+  "basePath": "/",
+  "schemes": [
+    "http"
+  ],
+  "paths": {
+    "/vms": {
+      "post": {
+        "summary": "Create a new VM",
+        "description": "Creates a new virtual machine with the specified parameters.",
+        "parameters": [
+          {
+            "name": "vm_data",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "iso_url": {
+                  "type": "string"
+                },
+                "disk_size_gb": {
+                  "type": "integer",
+                  "default": 30
+                },
+                "memory_mb": {
+                  "type": "integer",
+                  "default": 4096
+                },
+                "vcpu_count": {
+                  "type": "integer",
+                  "default": 2
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "VM creation started"
+          },
+          "500": {
+            "description": "Failed to download ISO"
+          }
+        }
+      },
+      "get": {
+        "summary": "List all VMs",
+        "description": "Retrieves a list of all virtual machines.",
+        "responses": {
+          "200": {
+            "description": "A list of VMs",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/vms/{vm_name}": {
+      "delete": {
+        "summary": "Delete a VM",
+        "description": "Deletes a virtual machine with the specified name.",
+        "parameters": [
+          {
+            "name": "vm_name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "VM deleted"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
+    "/vms/{vm_name}/modify": {
+      "post": {
+        "summary": "Modify a VM",
+        "description": "Modifies the configuration of an existing virtual machine.",
+        "parameters": [
+          {
+            "name": "vm_name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "new_config",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "memory_mb": {
+                  "type": "integer"
+                },
+                "vcpu_count": {
+                  "type": "integer"
+                },
+                "disk_size_gb": {
+                  "type": "integer"
+                },
+                "new_name": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VM modified successfully"
+          },
+          "400": {
+            "description": "VM must be stopped before modification"
+          },
+          "404": {
+            "description": "VM not found"
+          },
+          "500": {
+            "description": "Failed to modify VM configuration"
+          }
+        }
+      }
+    },
+    "/vms/{vm_name}/unmount_iso": {
+      "post": {
+        "summary": "Unmount ISO from a VM",
+        "description": "Unmounts the ISO from the specified virtual machine.",
+        "parameters": [
+          {
+            "name": "vm_name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ISO unmounted and VM configuration updated"
+          },
+          "400": {
+            "description": "No CDROM device found"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
+    "/vms/{vm_name}/start": {
+      "post": {
+        "summary": "Start a VM",
+        "description": "Starts the specified virtual machine.",
+        "parameters": [
+          {
+            "name": "vm_name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VM started"
+          },
+          "400": {
+            "description": "Failed to start VM"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
+    "/vms/{vm_name}/stop": {
+      "post": {
+        "summary": "Stop a VM",
+        "description": "Stops the specified virtual machine.",
+        "parameters": [
+          {
+            "name": "vm_name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VM stopped"
+          },
+          "400": {
+            "description": "Failed to stop VM"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
+    "/vms/{vm_name}/export": {
+      "get": {
+        "summary": "Export a VM",
+        "description": "Exports the specified virtual machine to the user's desktop.",
+        "parameters": [
+          {
+            "name": "vm_name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VM exported"
+          },
+          "400": {
+            "description": "VM must be stopped before export"
+          },
+          "404": {
+            "description": "VM not found or Disk image not found"
+          }
+        }
+      }
+    },
+    "/vms/{vm_name}/exportCompressed": {
+      "get": {
+        "summary": "Export a VM as compressed tar.gz",
+        "description": "Exports the specified virtual machine as a compressed tar.gz file to the user's desktop.",
+        "parameters": [
+          {
+            "name": "vm_name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VM exported"
+          },
+          "400": {
+            "description": "VM must be stopped before export"
+          },
+          "404": {
+            "description": "VM not found or Disk image not found"
+          }
+        }
+      }
+    },
+    "/vms/import": {
+      "post": {
+        "summary": "Import a VM",
+        "description": "Imports a virtual machine from a tar file.",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "formData",
+            "required": true,
+            "type": "file"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VM imported successfully"
+          },
+          "400": {
+            "description": "No file part, No selected file, or Invalid tar file contents"
+          },
+          "404": {
+            "description": "Desktop directory not found"
+          },
+          "500": {
+            "description": "Failed to extract tar file or Failed to define VM"
+          }
+        }
+      }
+    },
+    "/vms/importCompressed": {
+      "post": {
+        "summary": "Import a compressed VM",
+        "description": "Imports a virtual machine from a compressed tar.gz file.",
+        "parameters": [
+          {
+            "name": "file",
+            "in": "formData",
+            "required": true,
+            "type": "file"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VM imported successfully"
+          },
+          "400": {
+            "description": "No file part, No selected file, or Invalid tar.gz file contents"
+          },
+          "404": {
+            "description": "Desktop directory not found"
+          },
+          "500": {
+            "description": "Failed to extract tar.gz file or Failed to define VM"
+          }
+        }
+      }
+    }
+  }
+}
