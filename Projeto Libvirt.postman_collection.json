@@ -1,0 +1,267 @@
+{
+	"info": {
+		"_postman_id": "33331aca-b3e1-4262-b3c8-da97fcc8729b",
+		"name": "Projeto Libvirt",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "36319941"
+	},
+	"item": [
+		{
+			"name": "List VMS",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "http://127.0.0.1:5000/vms"
+			},
+			"response": []
+		},
+		{
+			"name": "Start VM",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://127.0.0.1:5000/vms/neo-mint/start"
+			},
+			"response": []
+		},
+		{
+			"name": "Stop VM",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": "http://127.0.0.1:5000/vms/neo-mint/stop"
+			},
+			"response": []
+		},
+		{
+			"name": "Delete VM",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": "http://127.0.0.1:5000/vms/mint2-vm"
+			},
+			"response": []
+		},
+		{
+			"name": "Create VM",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Cache-Control",
+						"value": "no-cache",
+						"name": "cache-control",
+						"type": "text"
+					},
+					{
+						"key": "Postman-Token",
+						"value": "<calculated when request is sent>",
+						"name": "postman-token",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"name": "content-type",
+						"type": "text"
+					},
+					{
+						"key": "Content-Length",
+						"value": "<calculated when request is sent>",
+						"name": "content-length",
+						"type": "text"
+					},
+					{
+						"key": "Host",
+						"value": "<calculated when request is sent>",
+						"name": "host",
+						"type": "text"
+					},
+					{
+						"key": "User-Agent",
+						"value": "PostmanRuntime/7.32.1",
+						"name": "user-agent",
+						"type": "text"
+					},
+					{
+						"key": "Accept",
+						"value": "*/*",
+						"name": "accept",
+						"type": "text"
+					},
+					{
+						"key": "Accept-Encoding",
+						"value": "gzip, deflate, br",
+						"name": "accept-encoding",
+						"type": "text"
+					},
+					{
+						"key": "Connection",
+						"value": "keep-alive",
+						"name": "connection",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"alpine-vm\",\n    \"iso_url\": \"https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-standard-3.20.1-x86_64.iso\",\n    \"disk_size_gb\": 20,\n    \"memory_mb\": 4096,\n    \"vcpu_count\": 2\n}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://127.0.0.1:5000/vms"
+			},
+			"response": []
+		},
+		{
+			"name": "UnMount ISO VM",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Cache-Control",
+						"value": "no-cache",
+						"name": "cache-control",
+						"type": "text"
+					},
+					{
+						"key": "Postman-Token",
+						"value": "<calculated when request is sent>",
+						"name": "postman-token",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"name": "content-type",
+						"type": "text"
+					},
+					{
+						"key": "Content-Length",
+						"value": "<calculated when request is sent>",
+						"name": "content-length",
+						"type": "text"
+					},
+					{
+						"key": "Host",
+						"value": "<calculated when request is sent>",
+						"name": "host",
+						"type": "text"
+					},
+					{
+						"key": "User-Agent",
+						"value": "PostmanRuntime/7.32.1",
+						"name": "user-agent",
+						"type": "text"
+					},
+					{
+						"key": "Accept",
+						"value": "*/*",
+						"name": "accept",
+						"type": "text"
+					},
+					{
+						"key": "Accept-Encoding",
+						"value": "gzip, deflate, br",
+						"name": "accept-encoding",
+						"type": "text"
+					},
+					{
+						"key": "Connection",
+						"value": "keep-alive",
+						"name": "connection",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": "http://127.0.0.1:5000/vms/mint-vm/unmount_iso"
+			},
+			"response": []
+		},
+		{
+			"name": "Modify VM",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"memory_mb\": 7096,\n    \"vcpu_count\": 5,\n    \"disk_size_gb\": 80,\n    \"new_name\": \"neo-mint\"\n}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://127.0.0.1:5000/vms/mint2-vm/modify"
+			},
+			"response": []
+		},
+		{
+			"name": "Import VM",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"value": "",
+							"type": "file"
+						}
+					]
+				},
+				"url": "http://127.0.0.1:5000/vms/import"
+			},
+			"response": []
+		},
+		{
+			"name": "Import VM Compressed",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/home/tnt/Escritorio/mint2-vm.tar.gz"
+						}
+					]
+				},
+				"url": "http://127.0.0.1:5000/vms/importCompressed"
+			},
+			"response": []
+		},
+		{
+			"name": "Export VM",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "http://127.0.0.1:5000/vms/neo-mint/export"
+			},
+			"response": []
+		},
+		{
+			"name": "Export VM Compressed",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "http://127.0.0.1:5000/vms/mint2-vm/exportCompressed"
+			},
+			"response": []
+		}
+	]
+}
